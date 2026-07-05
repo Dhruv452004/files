@@ -21,9 +21,7 @@ try:
     import cairosvg  # type: ignore
 
     CAIROSVG_AVAILABLE = True
-except Exception:  # pragma: no cover - environment dependent
-    # Missing system libraries such as Cairo can raise OSError during import.
-    # Treat that as "not available" so the rest of the pipeline still works.
+except ImportError:  # pragma: no cover - environment dependent
     CAIROSVG_AVAILABLE = False
 
 
@@ -53,7 +51,15 @@ class PNGConverter:
 
     # ------------------------------------------------------------------
     def _convert_one(self, serial: int, raw_path: Path, source_url: str) -> ConversionResult:
-        output_path = self.output_dir / f"image_{serial:03d}.png"
+        import re
+        # raw_path already has the original filename (e.g. "banner.jpg")
+        # just swap the extension to .png
+        original_stem = re.sub(r'[\\/*?:"<>|]', "_", raw_path.stem)
+        output_path = self.output_dir / f"{original_stem}.png"
+
+        # Collision guard: agar same name ka PNG pehle se exist kare
+        if output_path.exists() and output_path != raw_path.with_suffix(".png"):
+            output_path = self.output_dir / f"{original_stem}_{serial:03d}.png"
 
         try:
             if raw_path.suffix.lower() == ".svg":
@@ -103,7 +109,7 @@ class PNGConverter:
         """
         if not CAIROSVG_AVAILABLE:
             raise RuntimeError(
-                "SVG conversion requires the optional Cairo runtime and cairosvg; "
-                "installation is missing, so this file could not be converted."
+                "cairosvg is not installed; cannot convert SVG to PNG. "
+                "Install it with: pip install cairosvg"
             )
         cairosvg.svg2png(url=str(raw_path), write_to=str(output_path))

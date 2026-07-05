@@ -124,8 +124,21 @@ class ImageDownloader:
                 raise RuntimeError("Empty response body")
 
             ext = self._resolve_extension(task.url, response.headers.get("Content-Type"))
-            filename = f"raw_{task.serial:03d}{ext}"
+
+            # Use original filename from URL (e.g. "banner.jpg")
+            from urllib.parse import urlparse
+            import re
+            url_path = urlparse(task.url).path
+            original_stem = Path(url_path).stem or f"raw_{task.serial:03d}"
+            original_stem = re.sub(r'[\\/*?:"<>|]', "_", original_stem)
+            filename = f"{original_stem}{ext}"
+
+            # Avoid collision if two URLs have same filename
             file_path = self.output_dir / filename
+            if file_path.exists():
+                filename = f"{original_stem}_{task.serial:03d}{ext}"
+                file_path = self.output_dir / filename
+
             file_path.write_bytes(content)
 
             log_success(task.url, "download", f"saved as {filename}")
